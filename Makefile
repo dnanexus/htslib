@@ -31,7 +31,7 @@ CPPFLAGS = -I.
 CFLAGS   = -g -Wall -O2
 EXTRA_CFLAGS_PIC = -fpic
 LDFLAGS  =
-LDLIBS   =
+LDLIBS   = -lcurl
 
 # For now these don't work too well as samtools also needs to know to
 # add -lbz2 and -llzma if linking against the static libhts.a library.
@@ -137,7 +137,7 @@ print-version:
 	@echo $(PACKAGE_VERSION)
 
 
-.SUFFIXES: .c .o .pico
+.SUFFIXES: .c .cc .o .pico
 
 .c.o:
 	$(CC) $(CFLAGS) $(CPPFLAGS) -c -o $@ $<
@@ -145,10 +145,16 @@ print-version:
 .c.pico:
 	$(CC) $(CFLAGS) $(CPPFLAGS) $(EXTRA_CFLAGS_PIC) -c -o $@ $<
 
+.cc.o:
+	g++ $(CFLAGS) $(CPPFLAGS) -std=c++11 -c -o $@ $<
+
+.cc.pico:
+	g++ $(CFLAGS) $(CPPFLAGS) $(EXTRA_CFLAGS_PIC) -std=c++11 -c -o $@ $<
 
 LIBHTS_OBJS = \
 	kfunc.o \
 	knetfile.o \
+	curlstream.o \
 	kstring.o \
 	bgzf.o \
 	faidx.o \
@@ -242,6 +248,8 @@ vcf_sweep.o vcf_sweep.pico: vcf_sweep.c $(htslib_vcf_sweep_h) $(htslib_bgzf_h)
 vcfutils.o vcfutils.pico: vcfutils.c $(htslib_vcfutils_h)
 kfunc.o kfunc.pico: kfunc.c htslib/kfunc.h
 regidx.o regidx.pico: regidx.c $(htslib_hts_h) $(HTSPREFIX)htslib/kstring.h $(HTSPREFIX)htslib/kseq.h $(HTSPREFIX)htslib/khash_str2int.h $(htslib_regidx_h)
+
+curlstream.o curlstream.pico: curlstream.cc
 
 cram/cram_codecs.o cram/cram_codecs.pico: cram/cram_codecs.c $(cram_h)
 cram/cram_decode.o cram/cram_decode.pico: cram/cram_decode.c $(cram_h) cram/os.h cram/md5.h
