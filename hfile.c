@@ -525,7 +525,7 @@ static hFILE *hopen_mem(const char *data, const char *mode)
 hFILE *hopen(const char *fname, const char *mode)
 {
     if (strncmp(fname, "http://", 7) == 0 ||
-        strncmp(fname, "ftp://", 6) == 0) return hopen_net(fname, mode);
+        strncmp(fname, "https://", 8) == 0) return hopen_net(fname, mode);
 #ifdef HAVE_IRODS
     else if (strncmp(fname, "irods:", 6) == 0) return hopen_irods(fname, mode);
 #endif
@@ -538,8 +538,7 @@ int hisremote(const char *fname)
 {
     // FIXME Make a new backend entry to return this
     if (strncmp(fname, "http://", 7) == 0 ||
-        strncmp(fname, "https://", 8) == 0 ||
-        strncmp(fname, "ftp://", 6) == 0) return 1;
+        strncmp(fname, "https://", 8) == 0) return 1;
 #ifdef HAVE_IRODS
     else if (strncmp(fname, "irods:", 6) == 0) return 1;
 #endif
