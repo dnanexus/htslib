@@ -32,7 +32,7 @@ CPPFLAGS = -I.
 CFLAGS   = -g -Wall -O2
 EXTRA_CFLAGS_PIC = -fpic
 LDFLAGS  =
-LDLIBS   = -lcurl
+LDLIBS   = -lcurl -lstdc++
 
 # For now these don't work too well as samtools also needs to know to
 # add -lbz2 and -llzma if linking against the static libhts.a library.
