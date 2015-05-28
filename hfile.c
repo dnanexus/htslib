@@ -448,23 +448,41 @@ int hfile_oflags(const char *mode)
     return rdwr | flags;
 }
 
-
-/*********************
- * In-memory backend *
- *********************/
+/*********************************************************************
+ * In-memory backend                                                 *
+ *                                                                   *
+ * Provide to hopen: "mem:" pbuffer plength                          *
+ * where pbuffer is a void** pointer to a pointer to a buffer and    *
+ * plength is a pointer to a size_t                                  *
+ *                                                                   *
+ * reading: *pbuffer is the address of the buffer to read and        *
+ * *plength is its size.                                             *
+ *                                                                   *
+ * writing: *pbuffer may be either the address of a malloc'd buffer  *
+ * or NULL initially. If *pbuffer is non-NULL then *plength is its   *
+ * initial size. Use hwrite and then hflush or hclose. Then *pbuffer *
+ * points to the data (possibly having been realloc'd) and *plength  *
+ * is its allocated size. Use htell to get the amount of data        *
+ * actually written.                                                 *
+ ********************************************************************/
 
 typedef struct {
     hFILE base;
-    const char *buffer;
-    size_t length, pos;
+    void **pbuffer;
+    size_t *plength;
+    size_t pos;
+
+    // fields for backwards-compability with old "data:" schema
+    void *dbuffer;
+    size_t dlength;
 } hFILE_mem;
 
 static ssize_t mem_read(hFILE *fpv, void *buffer, size_t nbytes)
 {
     hFILE_mem *fp = (hFILE_mem *) fpv;
-    size_t avail = fp->length - fp->pos;
+    size_t avail = *(fp->plength) - fp->pos;
     if (nbytes > avail) nbytes = avail;
-    memcpy(buffer, fp->buffer + fp->pos, nbytes);
+    memcpy(buffer, *(fp->pbuffer) + fp->pos, nbytes);
     fp->pos += nbytes;
     return nbytes;
 }
@@ -478,18 +496,44 @@ static off_t mem_seek(hFILE *fpv, off_t offset, int whence)
     switch (whence) {
     case SEEK_SET: origin = 0; break;
     case SEEK_CUR: origin = fp->pos; break;
-    case SEEK_END: origin = fp->length; break;
+    case SEEK_END: origin = *(fp->plength); break;
     default: errno = EINVAL; return -1;
     }
 
     if ((offset  < 0 && absoffset > origin) ||
-        (offset >= 0 && absoffset > fp->length - origin)) {
+        (offset >= 0 && absoffset > *(fp->plength) - origin)) {
         errno = EINVAL;
         return -1;
     }
 
     fp->pos = origin + offset;
     return fp->pos;
+}
+
+static ssize_t mem_write(hFILE *fpv, const void *buffer, size_t nbytes)
+{
+    hFILE_mem *fp = (hFILE_mem *) fpv;
+    size_t avail = *(fp->pbuffer) ? (*(fp->plength) - fp->pos) : 0;
+
+    // enlarge buffer if necessary
+    while (avail < nbytes) {
+        *(fp->plength) = 2*((*(fp->plength) > nbytes) ? *(fp->plength) : nbytes);
+        *(fp->pbuffer) = realloc(*(fp->pbuffer), *(fp->plength));
+        if (!*(fp->pbuffer)) {
+            errno = ENOMEM;
+            return -1;
+        }
+        avail = *(fp->plength) - fp->pos;
+    }
+
+    memcpy(*(fp->pbuffer) + fp->pos, buffer, nbytes);
+    fp->pos += nbytes;
+    return nbytes;
+}
+
+static int mem_flush(hFILE *fpv)
+{
+    return 0;
 }
 
 static int mem_close(hFILE *fpv)
@@ -499,19 +543,38 @@ static int mem_close(hFILE *fpv)
 
 static const struct hFILE_backend mem_backend =
 {
-    mem_read, NULL, mem_seek, NULL, mem_close
+    mem_read, mem_write, mem_seek, mem_flush, mem_close
 };
 
 static hFILE *hopen_mem(const char *data, const char *mode)
 {
-    // TODO Implement write modes, which will require memory allocation
-    if (strchr(mode, 'r') == NULL) { errno = EINVAL; return NULL; }
-
     hFILE_mem *fp = (hFILE_mem *) hfile_init(sizeof (hFILE_mem), mode, 0);
     if (fp == NULL) return NULL;
 
-    fp->buffer = data;
-    fp->length = strlen(data);
+    if (strncmp(data, "mem:", 4) == 0) {
+        memcpy(&(fp->pbuffer), data+4, sizeof(void**));
+        memcpy(&(fp->plength), data+4+sizeof(void**), sizeof(size_t*));
+        if (!*(fp->pbuffer)) {
+            *(fp->plength) = 0;
+        }
+        fp->dbuffer = 0;
+        fp->dlength = 0;
+    } else if (strncmp(data, "data:", 5) == 0) {
+        // backwards compatibility with older "data:" schema which is followed
+        // by a C string containing read-only data. As a null-terminated C
+        // string, the data should be text only.
+        if (strchr(mode, 'r') == NULL) {
+            hfile_destroy((hFILE*)fp);
+            errno = EINVAL;
+            return NULL;
+        }
+        fp->dbuffer = (char*)(data + 5);
+        fp->dlength = strlen(fp->dbuffer);
+
+        fp->pbuffer = &(fp->dbuffer);
+        fp->plength = &(fp->dlength);
+    }
+
     fp->pos = 0;
     fp->base.backend = &mem_backend;
     return &fp->base;
@@ -529,7 +592,8 @@ hFILE *hopen(const char *fname, const char *mode)
 #ifdef HAVE_IRODS
     else if (strncmp(fname, "irods:", 6) == 0) return hopen_irods(fname, mode);
 #endif
-    else if (strncmp(fname, "data:", 5) == 0) return hopen_mem(fname + 5, mode);
+    else if (strncmp(fname, "data:", 5) == 0 ||
+             strncmp(fname, "mem:", 4) == 0) return hopen_mem(fname, mode);
     else if (strcmp(fname, "-") == 0) return hopen_fd_stdinout(mode);
     else return hopen_fd(fname, mode);
 }

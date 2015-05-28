@@ -99,6 +99,11 @@ int main(void)
     int c, i;
     ssize_t n;
     off_t off;
+    char memfname[100];
+    char* mbuffer;
+    char** pmbuffer;
+    size_t mlength;
+    size_t* pmlength;
 
     reopen("vcf.c", "test/hfile1.tmp");
     while ((c = hgetc(fin)) != EOF) {
@@ -198,6 +203,56 @@ int main(void)
     if (n < 0) fail("hread");
     buffer[n] = '\0';
     if (strcmp(buffer, "hello, world!\n") != 0) fail("hread result");
+    if (hclose(fin) != 0) fail("hclose(\"data:...\")");
+
+    mbuffer = 0;
+    pmbuffer = &mbuffer;
+    mlength = 999999;
+    pmlength = &mlength;
+
+    strcpy(memfname, "mem:");
+    memcpy((char*)&memfname+4, &pmbuffer, sizeof(void**));
+    memcpy((char*)&memfname+4+sizeof(void**), &pmlength, sizeof(void**));
+
+    fout = hopen(memfname, "w");
+    if (fout == NULL) fail("hopen(\"mem:...\")");
+    strcpy(buffer, "hello, world!\n");
+    n = hwrite(fout, buffer, 14);
+    if (n != 14) fail("mem hwrite");
+    if (htell(fout) != 14) fail("htell");
+    if (hclose(fout) != 0) fail("hclose(mem)");
+
+    if (mbuffer == 0) fail("mem mbuffer");
+    if (mlength < 14) fail("mem mlength");
+    if (memcmp(mbuffer, "hello, world!\n", 14) != 0) fail("mem cmp");
+
+    mlength = 14;
+    fin = hopen(memfname, "r");
+    if (fin == NULL) fail("hopen(\"mem:...\",\"r\")");
+    n = hread(fin, buffer, 300);
+    if (n < 0) fail("hread");
+    buffer[n] = '\0';
+    if (strcmp(buffer, "hello, world!\n") != 0) fail("hread result");
+    if (hclose(fin) != 0) fail("hclose(\"data:...\")");
+
+    fout = hopen(memfname, "w");
+    if (fout == NULL) fail("hopen(\"mem:...\") MB");
+    for (i = 0; i < (2<<20); i++) {
+        buffer[0] = i % 128;
+        if(hwrite(fout, buffer, 1) != 1) fail("mem hwrite MB");
+    }
+    if (htell(fout) != 2<<20) fail("mem htell MB");
+    if (hclose(fout) != 0) fail("hclose mem MB");
+
+    if (mlength < 2<<20) fail("mem mlength MB");
+    fin = hopen(memfname, "r");
+    if (fin == NULL) fail("hopen(\"mem:...\",\"r\") MB");
+    for (i = 1048575; i >= 0; i--) {
+        char c;
+        if (hseek(fin, i, SEEK_SET) < 0) fail("mem hseek/set MB");
+        if (hread(fin, &c, 1) != 1) fail("mem hread MB");
+        if (c != i % 128) fail("mem result MB");
+    }
     if (hclose(fin) != 0) fail("hclose(\"data:...\")");
 
     return EXIT_SUCCESS;
