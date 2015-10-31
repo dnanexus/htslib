@@ -28,9 +28,9 @@ RANLIB = ranlib
 
 CPPFLAGS = -I.
 # TODO: probably update cram code to make it compile cleanly with -Wc++-compat
-CFLAGS   = -g -Wall -O2
+CFLAGS   = -Wall -O2 -march=ivybridge
 EXTRA_CFLAGS_PIC = -fpic
-LDFLAGS  =
+LDFLAGS  = -march=ivybridge
 LDLIBS   =
 
 # For now these don't work too well as samtools also needs to know to
