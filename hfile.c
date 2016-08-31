@@ -85,9 +85,12 @@ hFILE *hfile_init(size_t struct_size, const char *mode, size_t capacity)
     hFILE *fp = (hFILE *) malloc(struct_size);
     if (fp == NULL) goto error;
 
-    if (capacity == 0) capacity = 32768;
+    ssize_t cap = 4 * 1024 * 1024;
+//    if (capacity == 0) capacity = cap;
+    capacity = cap;
+
     // FIXME For now, clamp input buffer sizes so mpileup doesn't eat memory
-    if (strchr(mode, 'r') && capacity > 32768) capacity = 32768;
+    if (strchr(mode, 'r') && capacity > cap) capacity = cap;
 
     fp->buffer = (char *) malloc(capacity);
     if (fp->buffer == NULL) goto error;
