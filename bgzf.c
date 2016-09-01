@@ -769,7 +769,7 @@ static int worker_aux(worker_t *w)
     w->errcode = 0;
 
     for (i = w->i; i < w->mt->background->curr; i += w->mt->n_threads) {
-        int clen = BGZF_MAX_BLOCK_SIZE;
+        size_t clen = BGZF_MAX_BLOCK_SIZE;
         int ret = bgzf_compress(w->buf, &clen, w->mt->background->blk[i], w->mt->background->len[i], w->compress_level);
         if (ret != 0) {
             if (hts_verbose >= 2) fprintf(stderr, "[E::%s] bgzf_compress error %d\n", __func__, ret);
@@ -885,7 +885,6 @@ static void mt_queue(BGZF *fp)
     // Probable cause of assertion failure: caller ignored fp->errcode after a
     // previous bgzf_write
     assert(mt->foreground->curr < mt->n_blks);
-    memcpy(mt->blk[mt->curr], fp->uncompressed_block, fp->block_offset);
     memcpy(mt->foreground->blk[mt->foreground->curr], fp->uncompressed_block, fp->block_offset);
     mt->foreground->len[mt->foreground->curr] = fp->block_offset;
     fp->block_offset = 0;
