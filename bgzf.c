@@ -740,7 +740,7 @@ typedef struct bgzf_mtaux_workspace_t {
 
 typedef struct bgzf_mtaux_t {
     int n_threads, n_blks, done;
-    volatile int proc_cnt;
+    int proc_cnt;
     void **blk;
     int *len;
     // data is compressed in the 'background', while ingest continues in the 'foreground'
@@ -848,9 +848,10 @@ int bgzf_mt(BGZF *fp, int n_threads, int n_sub_blks)
     pthread_mutex_init(&mt->lock, 0);
     pthread_cond_init(&mt->cv_start, 0);
     pthread_cond_init(&mt->cv_idle, 0);
-    for (i = 1; i < mt->n_threads; ++i) // worker 0 is effectively launched by the master thread
+    for (i = 0; i < mt->n_threads; ++i)
         pthread_create(&mt->tid[i], &attr, mt_worker, &mt->w[i]);
     fp->mt = mt;
+    mt->fp = fp->fp;
     return 0;
 }
 
