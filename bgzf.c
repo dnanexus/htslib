@@ -815,6 +815,28 @@ static void *mt_worker(void *data)
     return 0;
 }
 
+
+// Create a zeroed-out workspace, and check for memory allocation failures.
+struct bgzf_mtaux_workspace_t* alloc_workspace(size_t n_blks)
+{
+    struct bgzf_mtaux_workspace_t* ws =
+        (struct bgzf_mtaux_workspace_t*) calloc(1, sizeof(bgzf_mtaux_workspace_t));
+    if (ws == NULL) return NULL;
+
+    ws->len = (int*)calloc(n_blks, sizeof(int));
+    if (ws->len == NULL) return NULL;
+
+    ws->blk = (void**)calloc(n_blks, sizeof(void*));
+    if (ws->blk == NULL) return NULL;
+
+    for (int i = 0; i < n_blks; ++i) {
+        ws->blk[i] = malloc(BGZF_MAX_BLOCK_SIZE);
+        if (ws->blk[i] == NULL) return NULL;
+    }
+
+    return ws;
+}
+
 int bgzf_mt(BGZF *fp, int n_threads, int n_sub_blks)
 {
     int i;
@@ -825,16 +847,10 @@ int bgzf_mt(BGZF *fp, int n_threads, int n_sub_blks)
     mt->n_threads = n_threads;
     mt->proc_cnt = n_threads;
     mt->n_blks = n_threads * n_sub_blks;
-    mt->background = (struct bgzf_mtaux_workspace_t*) calloc(1, sizeof(bgzf_mtaux_workspace_t));
-    mt->background->len = (int*)calloc(mt->n_blks, sizeof(int));
-    mt->background->blk = (void**)calloc(mt->n_blks, sizeof(void*));
-    mt->foreground = (struct bgzf_mtaux_workspace_t*) calloc(1, sizeof(bgzf_mtaux_workspace_t));
-    mt->foreground->len = (int*)calloc(mt->n_blks, sizeof(int));
-    mt->foreground->blk = (void**)calloc(mt->n_blks, sizeof(void*));
-    for (i = 0; i < mt->n_blks; ++i) {
-        mt->background->blk[i] = malloc(BGZF_MAX_BLOCK_SIZE);
-        mt->foreground->blk[i] = malloc(BGZF_MAX_BLOCK_SIZE);
-    }
+    mt->background = alloc_workspace(mt->n_blks);
+    if (mt->background == NULL) return -1;
+    mt->foreground = alloc_workspace(mt->n_blks);
+    if (mt->foreground == NULL) return -1;
     mt->tid = (pthread_t*)calloc(mt->n_threads, sizeof(pthread_t));
     mt->w = (worker_t*)calloc(mt->n_threads, sizeof(worker_t));
     for (i = 0; i < mt->n_threads; ++i) {
@@ -842,6 +858,7 @@ int bgzf_mt(BGZF *fp, int n_threads, int n_sub_blks)
         mt->w[i].mt = mt;
         mt->w[i].compress_level = fp->compress_level;
         mt->w[i].buf = malloc(BGZF_MAX_BLOCK_SIZE);
+        if (mt->w[i].buf == NULL) return -1;
     }
     pthread_attr_init(&attr);
     pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
