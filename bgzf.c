@@ -819,6 +819,7 @@ static void *mt_worker(void *data)
 // Create a zeroed-out workspace, and check for memory allocation failures.
 struct bgzf_mtaux_workspace_t* alloc_workspace(size_t n_blks)
 {
+    int i;
     struct bgzf_mtaux_workspace_t* ws =
         (struct bgzf_mtaux_workspace_t*) calloc(1, sizeof(bgzf_mtaux_workspace_t));
     if (ws == NULL) return NULL;
@@ -829,7 +830,7 @@ struct bgzf_mtaux_workspace_t* alloc_workspace(size_t n_blks)
     ws->blk = (void**)calloc(n_blks, sizeof(void*));
     if (ws->blk == NULL) return NULL;
 
-    for (int i = 0; i < n_blks; ++i) {
+    for (i = 0; i < n_blks; ++i) {
         ws->blk[i] = malloc(BGZF_MAX_BLOCK_SIZE);
         if (ws->blk[i] == NULL) return NULL;
     }
